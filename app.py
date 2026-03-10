@@ -1,60 +1,84 @@
 import streamlit as st
 import google.generativeai as genai
 
-# 1. Setup - Pulls from Streamlit Secrets
-# On your computer, this is in .streamlit/secrets.toml
-# On Streamlit Cloud, it's in the 'Secrets' settings menu.
+# 1. Page Configuration
+st.set_page_config(page_title="MAX | Limon Media Intake", page_icon="🤖", layout="centered")
+
+# Custom CSS for branding
+st.markdown("""
+    <style>
+    .stApp { max-width: 800px; margin: 0 auto; }
+    .stChatMessage { border-radius: 15px; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# 2. API Security & Setup
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 else:
-    st.error("Please add your GOOGLE_API_KEY to Streamlit Secrets.")
+    st.error("Missing API Key. Please add GOOGLE_API_KEY to your Streamlit Secrets.")
     st.stop()
 
-# 2. Configure MAX's Persona
-st.set_page_config(page_title="MAX | Limon Media Intake", page_icon="🤖")
-st.title("🤖 Meet MAX")
-st.caption("Professional Intake Specialist for Limon Media")
+# 3. System Instruction (The Brain)
+SYSTEM_PROMPT = (
+    "You are MAX, the AI Intake Specialist for Limon Media, a growth operations and automation consultancy. "
+    "Your goal is to qualify potential clients for Edward Limon. "
+    "\n\nTONE: Professional, tech-savvy, energetic, and concise."
+    "\n\nGUIDELINES:"
+    "\n- Greet the user and ask for their business name."
+    "\n- Identify their primary marketing or automation bottleneck (SEO, PPC, Growth Ops)."
+    "\n- Ask for their monthly budget range (e.g., $1k-5k, $5k-10k, $10k+)."
+    "\n- If the user is qualified, tell them Edward Limon will follow up shortly."
+    "\n- Keep responses brief—avoid long paragraphs."
+)
 
-# Initialize Chat History
+# 4. Initialize Chat Session State
 if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {"role": "assistant", "content": "Hi! I'm MAX. I help Limon Media understand your marketing goals. What's your business name?"}
-    ]
+    st.session_state.messages = []
+    # Initial Greeting
+    st.session_state.messages.append({"role": "assistant", "content": "Hello! I'm MAX from Limon Media. What business are we looking to grow today?"})
 
-# Display existing messages
+# Display chat history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# 3. Chat Logic
-if prompt := st.chat_input("Type your message here..."):
+# 5. Chat Logic
+if prompt := st.chat_input("How can Limon Media help you?"):
     # Add user message to history
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Generate Response from Gemini
+    # Generate Assistant Response
     with st.chat_message("assistant"):
         try:
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            
-            # This is where you inject the "Limon Media" instructions
-            system_instruction = (
-                "You are MAX, an intake specialist for Limon Media digital marketing. "
-                "Be professional, encouraging, and brief. Ask about their marketing needs "
-                "(SEO, Ads, Web) and their general budget. Once qualified, let them know "
-                "Edward will be in touch."
+            # Using Gemini 1.5 Flash for speed
+            model = genai.GenerativeModel(
+                model_name="gemini-1.5-flash",
+                system_instruction=SYSTEM_PROMPT
             )
             
-            # Combine history for context
-            full_history = [{"role": m["role"], "parts": [m["content"]]} for m in st.session_state.messages]
+            # Formatting history for Gemini
+            chat = model.start_chat(history=[
+                {"role": "user" if m["role"] == "user" else "model", "parts": [m["content"]]} 
+                for m in st.session_state.messages[:-1]
+            ])
             
-            # Generate the reply
-            response = model.generate_content([system_instruction] + [m["content"] for m in st.session_state.messages])
+            # Streaming the response for a "Pro" feel
+            response = chat.send_message(prompt, stream=True)
             
-            msg = response.text
-            st.markdown(msg)
-            st.session_state.messages.append({"role": "assistant", "content": msg})
+            full_response = ""
+            placeholder = st.empty()
+            
+            for chunk in response:
+                full_response += chunk.text
+                placeholder.markdown(full_response + "▌")
+            
+            placeholder.markdown(full_response)
+            
+            # Save the final response to history
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
             
         except Exception as e:
-            st.error(f"Something went wrong: {e}")
+            st.error(f"An error occurred: {str(e)}")
