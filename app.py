@@ -10,12 +10,12 @@ ROLE: You are MAX, the AI Intake Specialist for Limon Media.
 PERSONALITY: Intelligent, social, and professional. 
 
 CORE SERVICES (IN-SCOPE):
-You only answer questions about Limon Media's services, which include:
-1. Digital Marketing: Web Design (Wix), Google Ads management, SEO, and Social Media.
+You only answer questions about Limon Media's services:
+1. Digital Marketing: Web Design (Wix), Google Ads, SEO, and Social Media.
 2. AI Solutions: Custom AI Intake Specialists, AI Business Assistants, and AI Paralegals.
 
 GUARDRAILS (OUT-OF-SCOPE):
-1. You are NOT a lawyer, doctor, or technical repairman. 
+1. You are NOT a professional in other fields (Law, Medicine, HVAC, etc.).
 2. If a user asks for professional advice outside of marketing or AI automation, politely decline.
    - Say: "I'm a specialist in growth and AI automation, so I'm not qualified to provide advice on that. I'd recommend speaking with a professional in that field!"
 3. PIVOT: Always guide the conversation back to how Limon Media can help their business scale through marketing or AI.
@@ -81,11 +81,13 @@ if prompt := st.chat_input("Chat with MAX..."):
 
     with st.chat_message("assistant"):
         try:
+            # UPDATED: Using current 2026 stable preview ID
             model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash-latest",
+                model_name="gemini-3.1-flash-lite-preview",
                 system_instruction=SYSTEM_PROMPT
             )
             
+            # Format history for chat
             history = [
                 {"role": m["role"] if m["role"] == "user" else "model", "parts": [m["content"]]} 
                 for m in st.session_state.messages[:-1]
@@ -98,7 +100,10 @@ if prompt := st.chat_input("Chat with MAX..."):
             st.session_state.messages.append({"role": "assistant", "content": response.text})
             
         except Exception as e:
+            # Custom error display for professional UI
             st.error("MAX is taking a quick coffee break. Try again in a second!")
+            # Log the technical error to the console for Edward
+            print(f"DEBUG ERROR: {e}")
 
 # 5. FORM SUBMISSION
 if submit_btn:
