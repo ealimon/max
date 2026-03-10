@@ -2,16 +2,24 @@ import streamlit as st
 import google.generativeai as genai
 import resend
 
-# 1. THE BRAIN: PERSONALITY & LOGIC
+# 1. THE BRAIN: REFINED SCOPE & AI SERVICES
 st.set_page_config(page_title="MAX | Limon Media", page_icon="🤖")
 
 SYSTEM_PROMPT = """
-You are MAX, a savvy and approachable Growth Ops specialist at Limon Media.
-- TONE: Intelligent, social, and helpful. You sound like a partner, not a vendor.
-- STYLE: Avoid corporate jargon like 'friction points' or 'ROI scaling' unless the user says it first. 
-- LOCAL TOUCH: You're based in the Coachella Valley. You know the local business landscape.
-- HANDLING OFF-TOPIC: If asked 'off the wall' or personal questions, answer with wit and a smile, then gracefully pivot back to how you can help their business grow.
-- GOAL: Be concise. Ask one thoughtful question at a time to keep the conversation flowing.
+ROLE: You are MAX, the AI Intake Specialist for Limon Media. 
+PERSONALITY: Intelligent, social, and professional. 
+
+CORE SERVICES (IN-SCOPE):
+You only answer questions about Limon Media's services, which include:
+1. Digital Marketing: Web Design (Wix), Google Ads management, SEO, and Social Media.
+2. AI Solutions: Custom AI Intake Specialists, AI Business Assistants, and AI Paralegals.
+
+GUARDRAILS (OUT-OF-SCOPE):
+1. You are NOT a lawyer, doctor, or technical repairman. 
+2. If a user asks for professional advice outside of marketing or AI automation, politely decline.
+   - Say: "I'm a specialist in growth and AI automation, so I'm not qualified to provide advice on that. I'd recommend speaking with a professional in that field!"
+3. PIVOT: Always guide the conversation back to how Limon Media can help their business scale through marketing or AI.
+4. Respond in the same language the user uses (English/Spanish).
 """
 
 # API Initialization
@@ -22,30 +30,30 @@ else:
     st.error("Missing API Keys in Streamlit Secrets.")
     st.stop()
 
-# 2. SIDEBAR: THE CONVERSION BOX
+# 2. SIDEBAR: LEAD CAPTURE
 with st.sidebar:
     st.title("📬 Ready to scale?")
-    st.write("Drop your details below and I'll send this transcript over to Edward.")
+    st.write("Drop your details and I'll send this transcript over to Edward.")
     with st.form("lead_form", clear_on_submit=True):
-        biz_name = st.text_input("What's your business name?")
+        biz_name = st.text_input("Business Name")
         lead_email = st.text_input("Best email to reach you?")
         submit_btn = st.form_submit_button("Send to Edward")
 
-# 3. EMAIL DELIVERY
+# 3. EMAIL FUNCTION
 def send_lead_email(biz, email, transcript):
     try:
         target = st.secrets.get("CLIENT_EMAIL", "Edward@Limon.Media")
         resend.Emails.send({
             "from": "MAX Intake <onboarding@resend.dev>",
             "to": [target],
-            "subject": f"🚀 New Growth Conversation: {biz}",
+            "subject": f"🚀 New Growth Lead: {biz}",
             "html": f"""
                 <div style="font-family: sans-serif; color: #333;">
                     <h2>New Lead from MAX</h2>
                     <p><strong>Business:</strong> {biz}</p>
                     <p><strong>Email:</strong> {email}</p>
                     <hr>
-                    <div style="background: #fdfdfd; padding: 15px; border-left: 4px solid #007bff;">
+                    <div style="background: #f9f9f9; padding: 15px; border-left: 4px solid #007bff;">
                         {transcript.replace(chr(10), '<br>')}
                     </div>
                 </div>
@@ -59,7 +67,7 @@ def send_lead_email(biz, email, transcript):
 # 4. CHAT INTERFACE
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "Hey! I'm MAX. I was just looking over some local growth trends... curious, what's the one part of your business right now that feels like it should be automated, but just isn't yet?"}
+        {"role": "assistant", "content": "Hi, I'm MAX. How can I help you grow your business today?"}
     ]
 
 for msg in st.session_state.messages:
@@ -73,25 +81,24 @@ if prompt := st.chat_input("Chat with MAX..."):
 
     with st.chat_message("assistant"):
         try:
-            # Using the latest stable March 2026 model
             model = genai.GenerativeModel(
                 model_name="gemini-1.5-flash-latest",
                 system_instruction=SYSTEM_PROMPT
             )
             
-            # Use start_chat to manage the history properly
-            chat = model.start_chat(history=[
+            history = [
                 {"role": m["role"] if m["role"] == "user" else "model", "parts": [m["content"]]} 
                 for m in st.session_state.messages[:-1]
-            ])
+            ]
             
+            chat = model.start_chat(history=history)
             response = chat.send_message(prompt)
+            
             st.markdown(response.text)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
             
         except Exception as e:
             st.error("MAX is taking a quick coffee break. Try again in a second!")
-            print(f"Error: {e}")
 
 # 5. FORM SUBMISSION
 if submit_btn:
@@ -100,4 +107,4 @@ if submit_btn:
         if send_lead_email(biz_name, lead_email, full_transcript):
             st.sidebar.success("Got it! Edward will reach out soon.")
     else:
-        st.sidebar.warning("Mind filling those out so I know who to tell Edward about?")
+        st.sidebar.warning("Please fill out both fields.")
