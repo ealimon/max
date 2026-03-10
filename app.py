@@ -1,72 +1,58 @@
 import streamlit as st
 import google.generativeai as genai
 
-# 1. Page Configuration
+# 1. Page Configuration for Limon Media
 st.set_page_config(page_title="MAX | Limon Media Intake", page_icon="🤖", layout="centered")
 
-# Branding Styles
+# Custom UI styling
 st.markdown("""
     <style>
     .stApp { max-width: 800px; margin: 0 auto; }
-    .stChatMessage { border-radius: 15px; }
+    .stChatMessage { border-radius: 15px; border: 1px solid #f0f0f0; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. API Security
+# 2. API Security & Setup
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 else:
-    st.error("Missing API Key. Please add GOOGLE_API_KEY to your Streamlit Secrets.")
+    st.error("Missing API Key. Add GOOGLE_API_KEY to Streamlit Secrets (Advanced Settings).")
     st.stop()
 
-# 3. System Instruction
+# 3. System Instruction (MAX's Persona)
 SYSTEM_PROMPT = (
-    "You are MAX, the AI Intake Specialist for Limon Media. "
-    "Qualify leads for Edward Limon by asking for their business name, "
-    "marketing bottleneck, and budget range ($1k-5k, $5k-10k, etc.). "
-    "Be professional and concise."
+    "You are MAX, the lead qualification specialist for Limon Media. "
+    "Your tone is professional, helpful, and energetic. "
+    "1. Greet the user and ask for their business name. "
+    "2. Ask about their marketing bottleneck (SEO, PPC, Automation). "
+    "3. Ask for their monthly budget range (e.g., $1k-5k, $5k-10k). "
+    "4. If they seem qualified, tell them Edward Limon will follow up in 24 hours. "
+    "Be concise—no long paragraphs."
 )
 
-# 4. Initialize History
+# 4. Initialize Chat History
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "Hello! I'm MAX from Limon Media. What business are we looking to grow today?"}
+        {"role": "assistant", "content": "Hello! I'm MAX. What business are we growing today?"}
     ]
 
+# Display current chat history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# 5. Chat Logic
-if prompt := st.chat_input("How can Limon Media help you?"):
+# 5. Chat Interaction Logic
+if prompt := st.chat_input("Tell me about your business..."):
+    # Add user message to history
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # Generate Assistant Response
     with st.chat_message("assistant"):
         try:
-            # Using the stable model matching your GEO app
+            # Using Gemini 2.5 Flash (the 2026 stable workhorse)
             model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash",
+                model_name="gemini-2.5-flash",
                 system_instruction=SYSTEM_PROMPT
             )
-            
-            # Start chat with history
-            chat = model.start_chat(history=[
-                {"role": "user" if m["role"] == "user" else "model", "parts": [m["content"]]} 
-                for m in st.session_state.messages[:-1]
-            ])
-            
-            response = chat.send_message(prompt, stream=True)
-            full_response = ""
-            placeholder = st.empty()
-            
-            for chunk in response:
-                full_response += chunk.text
-                placeholder.markdown(full_response + "▌")
-            
-            placeholder.markdown(full_response)
-            st.session_state.messages.append({"role": "assistant", "content": full_response})
-            
-        except Exception as e:
-            st.error(f"An error occurred: {str(e)}")
