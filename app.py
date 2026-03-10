@@ -4,7 +4,7 @@ import google.generativeai as genai
 # 1. Page Configuration
 st.set_page_config(page_title="MAX | Limon Media Intake", page_icon="🤖", layout="centered")
 
-# Custom CSS for branding
+# Custom CSS for a clean agency look
 st.markdown("""
     <style>
     .stApp { max-width: 800px; margin: 0 auto; }
@@ -13,13 +13,14 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # 2. API Security & Setup
+# This looks for the "GOOGLE_API_KEY" you added to Streamlit Advanced Settings > Secrets
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 else:
     st.error("Missing API Key. Please add GOOGLE_API_KEY to your Streamlit Secrets.")
     st.stop()
 
-# 3. System Instruction (The Brain)
+# 3. System Instruction (MAX's Persona)
 SYSTEM_PROMPT = (
     "You are MAX, the AI Intake Specialist for Limon Media, a growth operations and automation consultancy. "
     "Your goal is to qualify potential clients for Edward Limon. "
@@ -53,32 +54,20 @@ if prompt := st.chat_input("How can Limon Media help you?"):
     # Generate Assistant Response
     with st.chat_message("assistant"):
         try:
-            # Using Gemini 1.5 Flash for speed
+            # Using 1.5-flash for consistency with GEO Auditor PRO
             model = genai.GenerativeModel(
                 model_name="gemini-1.5-flash",
                 system_instruction=SYSTEM_PROMPT
             )
             
-            # Formatting history for Gemini
+            # Start a chat session with history
             chat = model.start_chat(history=[
                 {"role": "user" if m["role"] == "user" else "model", "parts": [m["content"]]} 
                 for m in st.session_state.messages[:-1]
             ])
             
-            # Streaming the response for a "Pro" feel
+            # Streaming the response for a high-end feel
             response = chat.send_message(prompt, stream=True)
             
             full_response = ""
-            placeholder = st.empty()
-            
-            for chunk in response:
-                full_response += chunk.text
-                placeholder.markdown(full_response + "▌")
-            
-            placeholder.markdown(full_response)
-            
-            # Save the final response to history
-            st.session_state.messages.append({"role": "assistant", "content": full_response})
-            
-        except Exception as e:
-            st.error(f"An error occurred: {str(e)}")
+            placeholder = st
