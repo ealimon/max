@@ -18,7 +18,6 @@ OFFICIAL CONTACT INFO:
 - Scheduling: https://www.limon.media/contact
 - Email: edward@limon.media
 - Phone/Text: 442-268-0928
-- NEVER guess URLs. Always refer to the above.
 """
 
 # API Key Validation
@@ -51,14 +50,13 @@ if prompt := st.chat_input("Chat with MAX..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        # MODEL: Using the rock-solid 1.5-flash for Tier 1 stability
+        # MODEL: Using the rock-solid 1.5-flash for initial Tier 1 stability
         model = genai.GenerativeModel(
             model_name="gemini-1.5-flash", 
             system_instruction=SYSTEM_PROMPT
         )
         
         # Fixed Retry Logic
-        success = False
         for attempt in range(3):
             try:
                 history = [{"role": m["role"] if m["role"] == "user" else "model", "parts": [m["content"]]} for m in st.session_state.messages[:-1]]
@@ -67,7 +65,6 @@ if prompt := st.chat_input("Chat with MAX..."):
                 
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
-                success = True
                 break
             except Exception as e:
                 if attempt < 2:
