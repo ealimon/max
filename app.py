@@ -19,11 +19,11 @@ else:
 
 # 2. CHAT SESSION MANAGEMENT
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "How can I help today?"}]
+    st.session_state.messages = [{"role": "assistant", "content": "Hello. I'm Max. How can I help today?"}]
 
 # Sidebar Reset
 if st.sidebar.button("Reset MAX"):
-    st.session_state.messages = [{"role": "assistant", "content": "How can I help today?"}]
+    st.session_state.messages = [{"role": "assistant", "content": "Hello. I'm Max. How can I help today?"}]
     st.rerun()
 
 # Display Chat
