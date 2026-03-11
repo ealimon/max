@@ -2,67 +2,77 @@ import streamlit as st
 import google.generativeai as genai
 import time
 
-# 1. SETUP
-st.set_page_config(page_title="MAX | Limon Media", page_icon="🤖")
+# 1. PRODUCTION CONFIG
+st.set_page_config(page_title="MAX | Limon Media", page_icon="🤖", layout="centered")
+
+# Hide Streamlit "Made with Streamlit" for a cleaner look
+hide_style = """<style>footer {visibility: hidden;} #MainMenu {visibility: hidden;}</style>"""
+st.markdown(hide_style, unsafe_allow_html=True)
 
 SYSTEM_PROMPT = """
-ROLE: You are MAX, the AI Intake Specialist for Limon Media. 
-OFFICIAL CONTACT: edward@limon.media | 442-268-0928
+ROLE: You are MAX, the professional AI Intake Specialist for Limon Media. 
+TONE: Helpful, social, and direct.
+SERVICES: Web Design, PPC, SEO, and AI Automation.
+CONTACT: edward@limon.media | 442-268-0928
 """
 
 # Configure API
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 else:
-    st.error("Missing GOOGLE_API_KEY in Streamlit Secrets.")
+    st.error("Missing API Key. Please check Streamlit Secrets.")
     st.stop()
 
-# 2. CHAT SESSION MANAGEMENT
+# 2. SESSION STATE
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "Hello. I'm Max. How may I help today?"}]
 
 # Sidebar Reset
-if st.sidebar.button("Reset MAX"):
+if st.sidebar.button("Reset Conversation"):
     st.session_state.messages = [{"role": "assistant", "content": "Hello. I'm Max. How may I help today?"}]
     st.rerun()
 
-# Display Chat
+# 3. CHAT DISPLAY
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# 3. INTERACTION LOGIC
+# 4. RESPONSE LOGIC
 if prompt := st.chat_input("Ask MAX..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        # Stable model for Tier 1
-        model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash", 
-            system_instruction=SYSTEM_PROMPT
-        )
+        # We use a placeholder to give a 'typing' feel
+        response_placeholder = st.empty()
         
-        # Format history properly for Gemini
-        formatted_history = []
+        # Format history correctly for Gemini's 'ChatSession'
+        history = []
         for m in st.session_state.messages[:-1]:
-            role = "model" if m["role"] == "assistant" else "user"
-            formatted_history.append({"role": role, "parts": [m["content"]]})
+            history.append({
+                "role": "model" if m["role"] == "assistant" else "user",
+                "parts": [m["content"]]
+            })
 
-        # Tier 1 Handshake Logic
+        # AUTO-RETRY & SYNC LOGIC
+        model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction=SYSTEM_PROMPT)
+        
+        success = False
         for attempt in range(3):
             try:
-                chat = model.start_chat(history=formatted_history)
+                chat = model.start_chat(history=history)
                 response = chat.send_message(prompt)
                 
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
+                full_response = response.text
+                response_placeholder.markdown(full_response)
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
+                success = True
                 break
             except Exception as e:
                 if attempt < 2:
-                    time.sleep(2)
+                    time.sleep(3) # Give the API 3 seconds to breathe
                     continue
                 else:
-                    st.error("MAX is still syncing with his new engine. Please try one more time!")
-                    print(f"DEBUG ERROR: {e}")
+                    response_placeholder.error("MAX is finalizing his upgraded engine. This usually takes a few hours after a billing update. Please try again shortly!")
+                    print(f"DEBUG: {e}")
