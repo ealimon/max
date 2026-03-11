@@ -19,11 +19,6 @@ OFFICIAL CONTACT INFO:
 - Email: edward@limon.media
 - Phone/Text: 442-268-0928
 - NEVER guess URLs. Always refer to the above.
-
-GUARDRAILS:
-- You only answer marketing/AI automation questions. 
-- Pivot out-of-scope questions back to business growth.
-- Respond in the user's language (English/Spanish).
 """
 
 # API Key Validation
@@ -56,13 +51,13 @@ if prompt := st.chat_input("Chat with MAX..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        # MODEL: Using the 2026 Stable Production ID
+        # MODEL: Using the rock-solid 1.5-flash for Tier 1 stability
         model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash", 
+            model_name="gemini-1.5-flash", 
             system_instruction=SYSTEM_PROMPT
         )
         
-        # Retry logic for new paid accounts
+        # Fixed Retry Logic
         success = False
         for attempt in range(3):
             try:
@@ -74,4 +69,14 @@ if prompt := st.chat_input("Chat with MAX..."):
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
                 success = True
                 break
-            except Exception as e
+            except Exception as e:
+                if attempt < 2:
+                    time.sleep(2)
+                    continue
+                else:
+                    st.error("MAX is finalizing his new upgraded engine. Try one more time in 30 seconds!")
+                    print(f"DEBUG: {e}")
+
+# 4. FORM LOGIC
+if submit_btn and biz_name and lead_email:
+    st.sidebar.success(f"Perfect! Edward will reach out to {biz_name} soon.")
