@@ -19,11 +19,11 @@ else:
 
 # 2. CHAT SESSION MANAGEMENT
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "Ready to grow. How can I help today?"}]
+    st.session_state.messages = [{"role": "assistant", "content": "How can I help today?"}]
 
 # Sidebar Reset
 if st.sidebar.button("Reset MAX"):
-    st.session_state.messages = [{"role": "assistant", "content": "Ready to grow. How can I help today?"}]
+    st.session_state.messages = [{"role": "assistant", "content": "How can I help today?"}]
     st.rerun()
 
 # Display Chat
@@ -39,20 +39,34 @@ if prompt := st.chat_input("Ask MAX..."):
 
     with st.chat_message("assistant"):
         model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash", # Best for Tier 1 stability
+            model_name="gemini-1.5-flash", 
             system_instruction=SYSTEM_PROMPT
         )
         
+        # Proper History Formatting for Gemini
+        formatted_history = []
+        for m in st.session_state.messages[:-1]:
+            role = "model" if m["role"] == "assistant" else "user"
+            formatted_history.append({"role": role, "parts": [m["content"]]})
+
         # Tier 1 Handshake Logic
+        success = False
         for attempt in range(3):
             try:
-                chat = model.start_chat(history=[])
+                chat = model.start_chat(history=formatted_history)
                 response = chat.send_message(prompt)
-                st.markdown(response.text)
+                
+                placeholder = st.empty()
+                placeholder.markdown(response.text)
+                
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
+                success = True
                 break
             except Exception as e:
-                if "429" in str(e) or "404" in str(e):
-                    time.sleep(2) # Wait for Tier 1 sync
+                if attempt < 2:
+                    time.sleep(2)
                     continue
-                st.error("MAX is warming up his new engine. Please try once more!")
+                else:
+                    st.error("MAX is still syncing with the new billing tier. Try one more time!")
+                    # Log the error to the Streamlit console for you to see
+                    print(f"Error: {e}")
