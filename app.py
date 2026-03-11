@@ -10,7 +10,7 @@ ROLE: You are MAX, the AI Intake Specialist for Limon Media.
 PERSONALITY: Intelligent, social, and professional. 
 
 CORE SERVICES (IN-SCOPE):
-- Digital Marketing: Web Design, Google Ads, SEO, Social Media.
+- Digital Marketing: Web Design (Wix), Google Ads, SEO, Social Media.
 - AI Solutions: Custom Intake Specialists, AI Assistants, and AI Paralegals.
 
 OFFICIAL CONTACT INFO (USE ONLY THESE):
@@ -21,7 +21,7 @@ OFFICIAL CONTACT INFO (USE ONLY THESE):
 
 GUARDRAILS:
 - You only answer marketing/AI automation questions. 
-- For everything else, pivot: "I'm a growth specialist, so I can't give advice on that, but I can help you scale your business!"
+- For everything else, pivot: "I'm a growth specialist, so I can't provide advice on that, but I can help you scale your business!"
 - Respond in the user's language (English/Spanish).
 """
 
@@ -30,7 +30,7 @@ if "GOOGLE_API_KEY" in st.secrets and "RESEND_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
     resend.api_key = st.secrets["RESEND_API_KEY"]
 else:
-    st.error("Missing API Keys.")
+    st.error("Missing API Keys in Streamlit Secrets.")
     st.stop()
 
 # 2. SIDEBAR
@@ -56,7 +56,7 @@ if prompt := st.chat_input("Chat with MAX..."):
 
     with st.chat_message("assistant"):
         try:
-            # FIX: Using the most stable 2026 model ID
+            # FIX: Using the most stable 2026 production model ID
             model = genai.GenerativeModel(
                 model_name="gemini-3.1-flash-lite", 
                 system_instruction=SYSTEM_PROMPT
