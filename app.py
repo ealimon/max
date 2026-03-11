@@ -2,24 +2,28 @@ import streamlit as st
 import google.generativeai as genai
 import resend
 
-# 1. THE BRAIN: REFINED SCOPE & AI SERVICES
+# 1. THE BRAIN: REFINED SCOPE & VERIFIED CONTACTS
 st.set_page_config(page_title="MAX | Limon Media", page_icon="🤖")
 
 SYSTEM_PROMPT = """
 ROLE: You are MAX, the AI Intake Specialist for Limon Media. 
-PERSONALITY: Intelligent, social, and professional. 
+PERSONALITY: Intelligent, social, and professional. You sound like a savvy growth partner.
 
 CORE SERVICES (IN-SCOPE):
 You only answer questions about Limon Media's services:
 1. Digital Marketing: Web Design (Wix), Google Ads, SEO, and Social Media.
 2. AI Solutions: Custom AI Intake Specialists, AI Business Assistants, and AI Paralegals.
 
-GUARDRAILS (OUT-OF-SCOPE):
-1. You are NOT a professional in other fields (Law, Medicine, HVAC, etc.).
-2. If a user asks for professional advice outside of marketing or AI automation, politely decline.
-   - Say: "I'm a specialist in growth and AI automation, so I'm not qualified to provide advice on that. I'd recommend speaking with a professional in that field!"
-3. PIVOT: Always guide the conversation back to how Limon Media can help their business scale through marketing or AI.
-4. Respond in the same language the user uses (English/Spanish).
+CONTACT & SCHEDULING (USE ONLY THESE):
+- To schedule a call or discovery session, direct users to: https://www.limon.media/contact
+- Professional Email: edward@limon.media
+- Call/Text: 442-268-0928
+- NEVER guess or hallucinate other URLs.
+
+GUARDRAILS:
+1. You are NOT a professional in other fields (Law, Medicine, etc.). If asked, politely decline and pivot back to growth.
+2. Respond in the same language the user uses (English/Spanish).
+3. Keep responses concise.
 """
 
 # API Initialization
@@ -42,7 +46,7 @@ with st.sidebar:
 # 3. EMAIL FUNCTION
 def send_lead_email(biz, email, transcript):
     try:
-        target = st.secrets.get("CLIENT_EMAIL", "Edward@Limon.Media")
+        target = st.secrets.get("CLIENT_EMAIL", "edward@limon.media")
         resend.Emails.send({
             "from": "MAX Intake <onboarding@resend.dev>",
             "to": [target],
@@ -81,13 +85,12 @@ if prompt := st.chat_input("Chat with MAX..."):
 
     with st.chat_message("assistant"):
         try:
-            # UPDATED: Using current 2026 stable preview ID
+            # Using the stable production ID
             model = genai.GenerativeModel(
-                model_name="gemini-3.1-flash-lite-preview",
+                model_name="gemini-1.5-flash",
                 system_instruction=SYSTEM_PROMPT
             )
             
-            # Format history for chat
             history = [
                 {"role": m["role"] if m["role"] == "user" else "model", "parts": [m["content"]]} 
                 for m in st.session_state.messages[:-1]
@@ -100,9 +103,7 @@ if prompt := st.chat_input("Chat with MAX..."):
             st.session_state.messages.append({"role": "assistant", "content": response.text})
             
         except Exception as e:
-            # Custom error display for professional UI
             st.error("MAX is taking a quick coffee break. Try again in a second!")
-            # Log the technical error to the console for Edward
             print(f"DEBUG ERROR: {e}")
 
 # 5. FORM SUBMISSION
