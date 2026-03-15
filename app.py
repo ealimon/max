@@ -1,54 +1,74 @@
 import streamlit as st
 import google.generativeai as genai
 
-# 1. Setup Page & Styling
+# 1. Page Configuration & UI Clean-up
 st.set_page_config(page_title="MAX | Limon Media Intake", layout="centered")
+
+# Custom CSS to hide Streamlit branding for a cleaner "app" feel
+st.markdown("""
+    <style>
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        .stChatMessage { border-radius: 10px; }
+    </style>
+""", unsafe_allow_html=True)
+
 st.title("🤖 Meet MAX")
 st.caption("Limon Media's AI Intake Specialist")
 
 # 2. Access Gemini API Key from Streamlit Secrets
+# Make sure GEMINI_API_KEY is set in your Streamlit Cloud Secrets dashboard
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-except KeyError:
-    st.error("API Key not found. Please set GEMINI_API_KEY in Streamlit Secrets.")
+except Exception as e:
+    st.error("API Key configuration failed. Check your Streamlit Secrets.")
+    st.stop()
 
-# 3. Initialize the "Brain"
+# 3. Initialize the Model with System Instructions
 model = genai.GenerativeModel(
     model_name="gemini-1.5-flash",
     system_instruction=(
         "You are MAX, the AI Intake Specialist for Limon Media (https://www.limon.media/). "
-        "Business owners often don't know the technical terms; they just want 'more calls' or 'more orders.' "
-        "Your job is to listen to their business goals and bridge the gap. "
-        "Helpful Tip: If they want calls, mention Google Ads or Local SEO. "
-        "Mandatory: Be professional, friendly, and eventually ask for their Business Name and Email Address."
+        "Your goal is to help business owners bridge the gap between their goals and marketing solutions. "
+        "Business owners often say 'I want more calls' or 'more orders'—translate this into SEO, Google Ads, or Web Design. "
+        "Always be professional, encouraging, and Coachella Valley local-friendly. "
+        "MANDATORY: You must eventually collect the Business Name and Email Address so Edward Limon can follow up."
     )
 )
 
 # 4. Chat History Management
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "Hi! I'm MAX. Tell me a bit about your business and what you're hoping to achieve—is it more phone calls, more walk-ins, or something else?"}
+        {
+            "role": "assistant", 
+            "content": "Hi! I'm MAX from Limon Media. Tell me a bit about your business and what you're hoping to achieve—is it more phone calls, more walk-ins, or just more growth in general?"
+        }
     ]
 
-# Display Chat History
+# Display existing chat history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 # 5. Chat Logic
 if prompt := st.chat_input("How can Limon Media help your business?"):
-    # User message
+    # Display user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # AI response
+    # Generate and display AI response
     with st.chat_message("assistant"):
-        # We pass the history to Gemini to maintain context
-        history = [{"role": m["role"], "parts": [m["content"]]} for m in st.session_state.messages]
-        chat = model.start_chat(history=history[:-1]) # Exclude the current prompt
+        # Format history for the Gemini API
+        history = [
+            {"role": "user" if m["role"] == "user" else "model", "parts": [m["content"]]} 
+            for m in st.session_state.messages[:-1]
+        ]
         
-        response = chat.send_message(prompt)
+        chat_session = model.start_chat(history=history)
+        response = chat_session.send_message(prompt)
+        
         full_response = response.text
         st.markdown(full_response)
         
