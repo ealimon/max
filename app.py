@@ -24,15 +24,15 @@ except Exception as e:
     st.stop()
 
 # 3. Initialize the Model
-# NOTE: Changed to 'models/gemini-1.5-flash' which is the more explicit path
+# Switched to 'gemini-1.5-flash' which is the most compatible string
 model = genai.GenerativeModel(
-    model_name="models/gemini-1.5-flash", 
+    model_name="gemini-1.5-flash", 
     system_instruction=(
         "You are MAX, the AI Intake Specialist for Limon Media (https://www.limon.media/). "
-        "Help business owners bridge the gap between their goals and marketing solutions. "
-        "If they want 'more calls' translate that to SEO or Google Ads. "
-        "Be professional and Coachella Valley friendly. "
-        "MANDATORY: Eventually collect their Business Name and Email Address."
+        "Your goal is to help business owners understand how marketing can solve their growth problems. "
+        "If they want 'more calls', suggest SEO or Google Ads. "
+        "Always be professional, tech-savvy, and Coachella Valley friendly. "
+        "MANDATORY: You must collect their Business Name and Email Address before the chat ends."
     )
 )
 
@@ -45,7 +45,7 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Initial Greeting if chat is empty
+# Initial Greeting
 if not st.session_state.messages:
     initial_msg = "Hi! I'm MAX from Limon Media. Tell me a bit about your business—are you looking for more phone calls, more leads, or just more growth in general?"
     st.session_state.messages.append({"role": "assistant", "content": initial_msg})
@@ -60,7 +60,6 @@ if prompt := st.chat_input("How can Limon Media help?"):
 
     try:
         # Re-build the chat session with the current history
-        # Gemini expects 'user' and 'model' as the roles
         history_for_api = []
         for m in st.session_state.messages[:-1]:
             role = "user" if m["role"] == "user" else "model"
@@ -75,4 +74,6 @@ if prompt := st.chat_input("How can Limon Media help?"):
         st.session_state.messages.append({"role": "assistant", "content": full_response})
         
     except Exception as e:
+        # Improved error message for debugging
         st.error(f"MAX is having a momentary glitch: {e}")
+        st.info("Tip: Double-check that your Gemini API key is active in Google AI Studio.")
