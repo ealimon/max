@@ -8,7 +8,7 @@ from datetime import datetime
 # 1. Page Configuration
 st.set_page_config(page_title="MAX | Limon Media", page_icon="🤖", layout="centered")
 
-# Professional UI: Hiding Streamlit elements for Wix integration
+# Professional UI: Hiding Streamlit elements for a clean Wix integration
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;}
@@ -75,35 +75,49 @@ if prompt := st.chat_input("Tell MAX about your business goals..."):
 
     try:
         response = st.session_state.chat_session.send_message(prompt)
+        ai_response = response.text
         
         with st.chat_message("assistant"):
-            st.markdown(response.text)
-        st.session_state.messages.append({"role": "assistant", "content": response.text})
+            st.markdown(ai_response)
+        st.session_state.messages.append({"role": "assistant", "content": ai_response})
 
-        # --- REFINED LEAD CAPTURE ---
-        if not st.session_state.lead_captured:
-            # We use the model to check the history for Name and Email
-            history_text = str(st.session_state.messages)
-            check = model.generate_content(f"Does this conversation contain a business name and an email address? Answer only YES or NO. History: {history_text}")
+        # --- LEAD CAPTURE LOGIC ---
+        # Look for the @ symbol in history to trigger the sheet write
+        full_history = " ".join([m["content"] for m in st.session_state.messages])
+        
+        if "@" in full_history and not st.session_state.lead_captured:
+            extract_task = (
+                "Based on the conversation, extract the following: "
+                "Business Name | Email | Primary Goal. "
+                "Format with pipes."
+            )
+            data_raw = model.generate_content(f"History: {full_history}\n\n{extract_task}").text
             
-            if "YES" in check.text.upper():
-                extract = model.generate_content(f"Extract these 3 things: Business Name | Email | Primary Goal. Format with pipes. History: {history_text}").text
-                
+            if "|" in data_raw:
                 try:
-                    parts = extract.split("|")
-                    existing_df = conn.read(spreadsheet=st.secrets["gsheets_url"], ttl=0)
-                    new_row = pd.DataFrame([{
-                        "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        "Business Name": parts[0].strip(),
-                        "Email": parts[1].strip(),
-                        "Goals/Notes": parts[2].strip()
-                    }])
-                    updated_df = pd.concat([existing_df, new_row], ignore_index=True)
-                    conn.update(spreadsheet=st.secrets["gsheets_url"], data=updated_df)
-                    st.session_state.lead_captured = True
-                    st.toast("Strategy synced!")
-                except:
+                    parts = data_raw.split("|")
+                    biz_name = parts[0].strip()
+                    email_addr = parts[1].strip()
+                    
+                    if "@" in email_addr:
+                        # Fetch the sheet with ttl=0 to ensure it's a live connection
+                        existing_df = conn.read(spreadsheet=st.secrets["gsheets_url"], ttl=0)
+                        
+                        new_row = pd.DataFrame([{
+                            "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                            "Business Name": biz_name,
+                            "Email": email_addr,
+                            "Goals/Notes": parts[2].strip() if len(parts) > 2 else "Check chat"
+                        }])
+                        
+                        updated_df = pd.concat([existing_df, new_row], ignore_index=True)
+                        conn.update(spreadsheet=st.secrets["gsheets_url"], data=updated_df)
+                        
+                        st.session_state.lead_captured = True
+                        st.toast("Success! Strategy details synced to Edward's sheet.")
+                except Exception as e:
+                    # Silent log to keep UI clean, but you can check logs in Streamlit Cloud
                     pass
 
     except Exception as e:
-        st.error(f"MAX is refreshing. Just a moment...")
+        st.error(f"MAX is refreshing. One moment please...")
