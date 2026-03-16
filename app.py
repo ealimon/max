@@ -2,70 +2,60 @@ import streamlit as st
 import google.generativeai as genai
 
 # 1. Page Configuration
-st.set_page_config(page_title="MAX | Limon Media Intake", layout="centered")
-
-# Hide Streamlit UI elements
-st.markdown("""
-    <style>
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;}
-    </style>
-""", unsafe_allow_html=True)
+st.set_page_config(page_title="MAX | Limon Media Intake", page_icon="🤖")
+st.markdown("<style>#MainMenu, footer, header {visibility: hidden;}</style>", unsafe_allow_html=True)
 
 st.title("🤖 Meet MAX")
-st.caption("Limon Media's AI Intake Specialist")
+st.caption("Strategic Intake Specialist for Limon Media")
 
 # 2. Key Setup
 if "GEMINI_API_KEY" not in st.secrets:
-    st.error("Please add your GEMINI_API_KEY to Streamlit Secrets.")
+    st.error("Missing API Key in Streamlit Secrets.")
     st.stop()
 
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-
-# 3. Model Initialization 
-# We use the direct string here to ensure compatibility
 try:
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction="You are MAX, the professional AI Intake Specialist for Limon Media. Your goal is to turn business goals into marketing leads. Ask for their business name and email address naturally."
-    )
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    model = genai.GenerativeModel("gemini-1.5-flash")
 except Exception as e:
-    st.error(f"Model failed to initialize: {e}")
+    st.error(f"Configuration Error: {e}")
+    st.stop()
 
-# 4. Chat Session
+# 3. Chat Session Initialization
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    st.session_state.chat_session = model.start_chat(history=[])
+    # Start the conversation with the model
+    st.session_state.chat = model.start_chat(history=[])
 
-# Display history
+# Display existing messages
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Welcome Message
+# Initial Greeting
 if not st.session_state.messages:
-    welcome = "Hi! I'm MAX from Limon Media. Tell me about your business objectives—are you looking for more calls, more leads, or something else?"
+    welcome = "Hi! I'm MAX. I help business owners in the Coachella Valley grow. What is your biggest goal for your business right now?"
     st.session_state.messages.append({"role": "assistant", "content": welcome})
     with st.chat_message("assistant"):
         st.markdown(welcome)
 
-# 5. Interaction
-if prompt := st.chat_input("Tell MAX about your business goals..."):
-    # Add user message
+# 4. Interaction Logic
+if prompt := st.chat_input("Tell MAX about your business..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     try:
-        # Generate response
-        response = st.session_state.chat_session.send_message(prompt)
+        # Prompt context to keep MAX on brand
+        context = (
+            "You are MAX, the AI Intake Specialist for Limon Media. "
+            "Help the user understand how digital marketing can solve their growth goals. "
+            "Always ask for their Business Name and Email Address politely."
+        )
+        response = st.session_state.chat.send_message(f"{context}\n\nUser: {prompt}")
         
-        # Add assistant message
         with st.chat_message("assistant"):
             st.markdown(response.text)
         st.session_state.messages.append({"role": "assistant", "content": response.text})
         
     except Exception as e:
-        st.error(f"MAX hit a snag: {e}")
-        st.info("Check if your API Key is active at https://aistudio.google.com/")
+        st.error(f"Connection status: Almost there! Error detail: {e}")
