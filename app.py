@@ -3,19 +3,20 @@ import google.generativeai as genai
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
+import traceback
 
-# 1. UI Branding
+# 1. Page Config
 st.set_page_config(page_title="MAX | Limon Media", page_icon="🤖", layout="centered")
 st.markdown("<style>#MainMenu, footer, header {visibility: hidden;} div[data-testid='stToolbar'] {display: none;} .stApp {background-color: white;}</style>", unsafe_allow_html=True)
 
-# 2. Connection
+# 2. Establish Connection
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
-    st.error(f"Secrets Error: {e}")
+    st.error("Secrets configuration error.")
     st.stop()
 
-# 3. Model
+# 3. AI Setup
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 model = genai.GenerativeModel("gemini-3.1-flash-lite-preview", system_instruction="You are MAX from Limon Media. Collect Business Name and Email.")
 
@@ -32,7 +33,7 @@ if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": welcome})
     with st.chat_message("assistant"): st.markdown(welcome)
 
-# 4. Reliable Sync
+# 4. Input & Brute Force Sync
 if prompt := st.chat_input("Message MAX..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"): st.markdown(prompt)
@@ -42,7 +43,7 @@ if prompt := st.chat_input("Message MAX..."):
         with st.chat_message("assistant"): st.markdown(response.text)
         st.session_state.messages.append({"role": "assistant", "content": response.text})
 
-        # TRIGGER
+        # Trigger on email
         history = " ".join([m["content"] for m in st.session_state.messages])
         if "@" in history and not st.session_state.lead_captured:
             extract = model.generate_content(f"Extract as pipes: Name | Email | Goal from: {history}").text
@@ -53,16 +54,19 @@ if prompt := st.chat_input("Message MAX..."):
                         "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
                         "Business": p[0].strip(),
                         "Email": p[1].strip(),
-                        "Notes": p[2].strip() if len(p) > 2 else "Lead"
+                        "Notes": p[2].strip() if len(p) > 2 else "Chat lead"
                     }])
                     
-                    # We specify 'Sheet1' directly to be safe
-                    conn.create(data=new_row, worksheet="Sheet1")
+                    # We use 'create' with clear parameters to force the write
+                    conn.create(data=new_row)
                     
                     st.session_state.lead_captured = True
-                    st.toast("✅ Synced to Google Sheets!")
+                    st.toast("✅ Synced to Edward's sheet!")
                 except Exception as sheet_err:
-                    # This will now show the actual error message from Google
-                    st.error(f"Google Sheet Sync Error: {str(sheet_err)}")
+                    # Capture the full error for the logs
+                    full_error = traceback.format_exc()
+                    print(f"DEBUG ERROR:\n{full_error}")
+                    st.error(f"Google Sheet Sync Error: {str(sheet_err) if str(sheet_err) else 'Check App Logs'}")
+
     except Exception as e:
         st.error(f"AI Error: {e}")
