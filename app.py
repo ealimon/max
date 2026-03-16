@@ -4,23 +4,20 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 
-# 1. Page & UI Styling
+# 1. UI Setup
 st.set_page_config(page_title="MAX | Limon Media", page_icon="🤖", layout="centered")
 st.markdown("<style>#MainMenu, footer, header {visibility: hidden;} div[data-testid='stToolbar'] {display: none;} .stApp {background-color: white;}</style>", unsafe_allow_html=True)
 
-# 2. Connection using Service Account Secrets
+# 2. Connection
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
-    st.error("Connection config error.")
+    st.error("Check your Secrets formatting.")
     st.stop()
 
 # 3. Model Logic
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel(
-    model_name="gemini-3.1-flash-lite-preview", 
-    system_instruction="You are MAX from Limon Media. Strategic and professional. You must collect a Business Name and Email."
-)
+model = genai.GenerativeModel("gemini-3.1-flash-lite-preview", system_instruction="You are MAX from Limon Media. Collect Business Name and Email.")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -31,11 +28,11 @@ for m in st.session_state.messages:
     with st.chat_message(m["role"]): st.markdown(m["content"])
 
 if not st.session_state.messages:
-    welcome = "Hi! I'm MAX from Limon Media. I help Coachella Valley businesses scale. What is your main business goal right now?"
+    welcome = "Hi! I'm MAX from Limon Media. What business goals are we tackling today?"
     st.session_state.messages.append({"role": "assistant", "content": welcome})
     with st.chat_message("assistant"): st.markdown(welcome)
 
-# 4. Reliable Sync Logic
+# 4. Brute Force Sync
 if prompt := st.chat_input("Message MAX..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"): st.markdown(prompt)
@@ -45,14 +42,13 @@ if prompt := st.chat_input("Message MAX..."):
         with st.chat_message("assistant"): st.markdown(response.text)
         st.session_state.messages.append({"role": "assistant", "content": response.text})
 
-        # Sync trigger: Check for email in history
+        # Trigger on email
         history = " ".join([m["content"] for m in st.session_state.messages])
         if "@" in history and not st.session_state.lead_captured:
-            extract = model.generate_content(f"Extract as pipes: Name | Email | Goal from: {history}").text
+            extract = model.generate_content(f"Extract 'Name | Email | Goal' from: {history}").text
             if "|" in extract:
                 try:
                     p = extract.split("|")
-                    # Prepare row - Ensure your Google Sheet Row 1 has exactly these 4 headers
                     new_row = pd.DataFrame([{
                         "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
                         "Business": p[0].strip(),
@@ -60,12 +56,18 @@ if prompt := st.chat_input("Message MAX..."):
                         "Notes": p[2].strip() if len(p) > 2 else "Lead"
                     }])
                     
-                    # Direct Create Command
-                    conn.create(data=new_row)
+                    # We use 'create' with a clear worksheet name to avoid ambiguity
+                    conn.create(data=new_row, worksheet="Sheet1")
                     
                     st.session_state.lead_captured = True
-                    st.toast("✅ Lead synced to Google Sheets!")
+                    st.toast("✅ Lead synced successfully!")
                 except Exception as sheet_err:
-                    st.error(f"Google Sheet Sync Error: {sheet_err}")
+                    # We are forcing the app to show the full error string
+                    error_msg = str(sheet_err)
+                    if "403" in error_msg or "permission" in error_msg.lower():
+                        st.error("Error: The Service Account needs 'Editor' access and the Google Drive API must be enabled in Cloud Console.")
+                    else:
+                        st.error(f"Sync Failure: {error_msg}")
+
     except Exception as e:
         st.error(f"AI Error: {e}")
