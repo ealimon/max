@@ -3,22 +3,24 @@ import google.generativeai as genai
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
-import traceback
 
-# 1. Page Config
+# 1. Page & UI Styling
 st.set_page_config(page_title="MAX | Limon Media", page_icon="🤖", layout="centered")
 st.markdown("<style>#MainMenu, footer, header {visibility: hidden;} div[data-testid='stToolbar'] {display: none;} .stApp {background-color: white;}</style>", unsafe_allow_html=True)
 
-# 2. Establish Connection
+# 2. Connection using Service Account Secrets
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
-    st.error("Secrets configuration error.")
+    st.error("Connection config error.")
     st.stop()
 
-# 3. AI Setup
+# 3. Model Logic
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel("gemini-3.1-flash-lite-preview", system_instruction="You are MAX from Limon Media. Collect Business Name and Email.")
+model = genai.GenerativeModel(
+    model_name="gemini-3.1-flash-lite-preview", 
+    system_instruction="You are MAX from Limon Media. Strategic and professional. You must collect a Business Name and Email."
+)
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -29,11 +31,11 @@ for m in st.session_state.messages:
     with st.chat_message(m["role"]): st.markdown(m["content"])
 
 if not st.session_state.messages:
-    welcome = "Hi! I'm MAX from Limon Media. What business goals are we tackling today?"
+    welcome = "Hi! I'm MAX from Limon Media. I help Coachella Valley businesses scale. What is your main business goal right now?"
     st.session_state.messages.append({"role": "assistant", "content": welcome})
     with st.chat_message("assistant"): st.markdown(welcome)
 
-# 4. Input & Brute Force Sync
+# 4. Reliable Sync Logic
 if prompt := st.chat_input("Message MAX..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"): st.markdown(prompt)
@@ -43,30 +45,27 @@ if prompt := st.chat_input("Message MAX..."):
         with st.chat_message("assistant"): st.markdown(response.text)
         st.session_state.messages.append({"role": "assistant", "content": response.text})
 
-        # Trigger on email
+        # Sync trigger: Check for email in history
         history = " ".join([m["content"] for m in st.session_state.messages])
         if "@" in history and not st.session_state.lead_captured:
             extract = model.generate_content(f"Extract as pipes: Name | Email | Goal from: {history}").text
             if "|" in extract:
                 try:
                     p = extract.split("|")
+                    # Prepare row - Ensure your Google Sheet Row 1 has exactly these 4 headers
                     new_row = pd.DataFrame([{
                         "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
                         "Business": p[0].strip(),
                         "Email": p[1].strip(),
-                        "Notes": p[2].strip() if len(p) > 2 else "Chat lead"
+                        "Notes": p[2].strip() if len(p) > 2 else "Lead"
                     }])
                     
-                    # We use 'create' with clear parameters to force the write
+                    # Direct Create Command
                     conn.create(data=new_row)
                     
                     st.session_state.lead_captured = True
-                    st.toast("✅ Synced to Edward's sheet!")
+                    st.toast("✅ Lead synced to Google Sheets!")
                 except Exception as sheet_err:
-                    # Capture the full error for the logs
-                    full_error = traceback.format_exc()
-                    print(f"DEBUG ERROR:\n{full_error}")
-                    st.error(f"Google Sheet Sync Error: {str(sheet_err) if str(sheet_err) else 'Check App Logs'}")
-
+                    st.error(f"Google Sheet Sync Error: {sheet_err}")
     except Exception as e:
         st.error(f"AI Error: {e}")
