@@ -4,7 +4,7 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 
-# 1. UI Setup
+# 1. Page Configuration & UI
 st.set_page_config(page_title="MAX | Limon Media", page_icon="🤖", layout="centered")
 
 st.markdown("""
@@ -17,7 +17,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. Connection Logic
+# 2. Connection Setup
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
@@ -70,36 +70,29 @@ if prompt := st.chat_input("Message MAX..."):
             st.markdown(ai_response)
         st.session_state.messages.append({"role": "assistant", "content": ai_response})
 
-        # --- NEW TRIGGER LOGIC ---
-        # Look for the email symbol directly in the raw text
+        # --- REFINED TRIGGER LOGIC ---
         history_text = " ".join([m["content"] for m in st.session_state.messages])
         
         if "@" in history_text and not st.session_state.lead_captured:
-            # Tell the AI to give us the data cleanly
-            extract_prompt = f"From this chat history, extract the following as 'Name | Email | Goal'. History: {history_text}"
+            extract_prompt = f"Extract 'Name | Email | Goal' from this chat. Use pipes. Chat: {history_text}"
             extraction = model.generate_content(extract_prompt).text
             
             if "|" in extraction:
-                parts = extraction.split("|")
-                # Prepare the new row
-                new_row = pd.DataFrame([{
-                    "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    "Business Name": parts[0].strip(),
-                    "Email": parts[1].strip(),
-                    "Goals/Notes": parts[2].strip() if len(parts) > 2 else "Check history"
-                }])
-
-                # FORCED SYNC: Instead of 'create', we will read and then update the whole sheet
-                # This is often more reliable for Service Accounts
                 try:
-                    existing_data = conn.read(ttl=0) # Get fresh data
-                    updated_data = pd.concat([existing_data, new_row], ignore_index=True)
-                    conn.update(data=updated_data)
+                    parts = extraction.split("|")
+                    new_row = pd.DataFrame([{
+                        "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        "Business Name": parts[0].strip(),
+                        "Email": parts[1].strip(),
+                        "Goals/Notes": parts[2].strip() if len(parts) > 2 else "Check history"
+                    }])
+
+                    # Use the most basic 'create' method which works best for appending rows
+                    conn.create(data=new_row)
                     
                     st.session_state.lead_captured = True
-                    st.toast("🚀 Success! Edward's lead sheet has been updated.")
+                    st.toast("🚀 Lead captured! Check your Google Sheet.")
                 except Exception as sheet_error:
-                    # If this pops up, we have a permission issue with the Service Account
                     st.error(f"Google Sheet sync failed: {sheet_error}")
 
     except Exception as e:
