@@ -4,21 +4,22 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 
+# 1. Page Config
 st.set_page_config(page_title="MAX | Limon Media", page_icon="🤖", layout="centered")
 
-# Wix-friendly Styling
+# Hide Streamlit UI for Wix
 st.markdown("<style>#MainMenu, footer, header {visibility: hidden;} div[data-testid='stToolbar'] {display: none;} .stApp {background-color: white;}</style>", unsafe_allow_html=True)
 
-# Connection
+# 2. Connection
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
-    st.error(f"Secret Error: {e}")
+    st.error(f"Secret Configuration Error: {e}")
     st.stop()
 
-# Gemini
+# 3. Model Setup
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel("gemini-3.1-flash-lite-preview", system_instruction="You are MAX from Limon Media. Collect Business Name and Email.")
+model = genai.GenerativeModel("gemini-3.1-flash-lite-preview", system_instruction="You are MAX from Limon Media. Strategic and professional. Collect Business Name and Email.")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -33,32 +34,40 @@ if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": welcome})
     with st.chat_message("assistant"): st.markdown(welcome)
 
+# 4. Input & Reliable Sync
 if prompt := st.chat_input("Message MAX..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"): st.markdown(prompt)
 
     try:
         response = st.session_state.chat_session.send_message(prompt)
-        with st.chat_message("assistant"): st.markdown(response.text)
-        st.session_state.messages.append({"role": "assistant", "content": response.text})
+        ai_msg = response.text
+        with st.chat_message("assistant"): st.markdown(ai_msg)
+        st.session_state.messages.append({"role": "assistant", "content": ai_msg})
 
-        # Sync Logic
-        hist = " ".join([m["content"] for m in st.session_state.messages])
-        if "@" in hist and not st.session_state.lead_captured:
-            extract = model.generate_content(f"Extract 'Name | Email | Goal' from: {hist}").text
-            if "|" in extract:
+        # Check for Email Trigger
+        full_history = " ".join([m["content"] for m in st.session_state.messages])
+        if "@" in full_history and not st.session_state.lead_captured:
+            # Simple extraction
+            extraction = model.generate_content(f"Extract 'Name | Email | Goal' from: {full_history}").text
+            
+            if "|" in extraction:
                 try:
-                    p = extract.split("|")
-                    new_row = pd.DataFrame([{"Date": datetime.now().strftime("%Y-%m-%d %H:%M"), "Business Name": p[0].strip(), "Email": p[1].strip(), "Goals/Notes": p[2].strip() if len(p)>2 else "Chat lead"}])
+                    p = extraction.split("|")
+                    new_row = pd.DataFrame([{
+                        "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        "Business Name": p[0].strip(),
+                        "Email": p[1].strip(),
+                        "Goals/Notes": p[2].strip() if len(p) > 2 else "Chat lead"
+                    }])
                     
-                    # Update sheet
-                    existing = conn.read(ttl=0)
-                    updated = pd.concat([existing, new_row], ignore_index=True)
-                    conn.update(data=updated)
+                    # DIRECT APPEND - The most stable method
+                    conn.create(data=new_row)
                     
                     st.session_state.lead_captured = True
                     st.toast("✅ Lead synced to Google Sheets!")
-                except Exception as e:
-                    st.error(f"Google Sheet sync failed: {e}")
+                    st.success("Strategy details have been sent to Edward.")
+                except Exception as sheet_error:
+                    st.error(f"Google Sheet Sync Error: {sheet_error}")
     except Exception as e:
         st.error(f"Error: {e}")
