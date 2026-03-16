@@ -12,12 +12,12 @@ st.markdown("<style>#MainMenu, footer, header {visibility: hidden;} div[data-tes
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
-    st.error("Secrets Error: Check your Private Key formatting.")
+    st.error(f"Secrets Error: {e}")
     st.stop()
 
-# 3. Gemini Config
+# 3. Model
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel("gemini-3.1-flash-lite-preview", system_instruction="You are MAX from Limon Media. Strategic and professional. Collect Business Name and Email.")
+model = genai.GenerativeModel("gemini-3.1-flash-lite-preview", system_instruction="You are MAX from Limon Media. Collect Business Name and Email.")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -28,11 +28,11 @@ for m in st.session_state.messages:
     with st.chat_message(m["role"]): st.markdown(m["content"])
 
 if not st.session_state.messages:
-    welcome = "Hi! I'm MAX from Limon Media. What business goals can I help you reach today?"
+    welcome = "Hi! I'm MAX from Limon Media. What business goals are we tackling today?"
     st.session_state.messages.append({"role": "assistant", "content": welcome})
     with st.chat_message("assistant"): st.markdown(welcome)
 
-# 4. Reliable Sync Logic
+# 4. Reliable Sync
 if prompt := st.chat_input("Message MAX..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"): st.markdown(prompt)
@@ -42,26 +42,27 @@ if prompt := st.chat_input("Message MAX..."):
         with st.chat_message("assistant"): st.markdown(response.text)
         st.session_state.messages.append({"role": "assistant", "content": response.text})
 
-        # TRIGGER: Sync when email is found
+        # TRIGGER
         history = " ".join([m["content"] for m in st.session_state.messages])
         if "@" in history and not st.session_state.lead_captured:
             extract = model.generate_content(f"Extract as pipes: Name | Email | Goal from: {history}").text
             if "|" in extract:
                 try:
                     p = extract.split("|")
-                    # CRITICAL: These keys must match your Google Sheet Row 1 exactly
                     new_row = pd.DataFrame([{
                         "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        "Business": p[0].strip() if len(p) > 0 else "N/A",
-                        "Email": p[1].strip() if len(p) > 1 else "N/A",
-                        "Notes": p[2].strip() if len(p) > 2 else "Lead from chat"
+                        "Business": p[0].strip(),
+                        "Email": p[1].strip(),
+                        "Notes": p[2].strip() if len(p) > 2 else "Lead"
                     }])
                     
-                    # Direct append
-                    conn.create(data=new_row)
+                    # We specify 'Sheet1' directly to be safe
+                    conn.create(data=new_row, worksheet="Sheet1")
+                    
                     st.session_state.lead_captured = True
-                    st.toast("✅ Strategy synced to Edward!")
+                    st.toast("✅ Synced to Google Sheets!")
                 except Exception as sheet_err:
-                    st.error(f"Google Sheet Sync Error: {sheet_err}")
+                    # This will now show the actual error message from Google
+                    st.error(f"Google Sheet Sync Error: {str(sheet_err)}")
     except Exception as e:
         st.error(f"AI Error: {e}")
