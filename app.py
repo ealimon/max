@@ -17,16 +17,16 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. Connection using Service Account Secrets
+# 2. Connection Logic
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
-    st.error("Connection configuration error. Check your Secrets.")
+    st.error(f"Configuration Error: {e}")
     st.stop()
 
 # 3. Gemini Config
 if "GEMINI_API_KEY" not in st.secrets:
-    st.error("Missing GEMINI_API_KEY.")
+    st.error("Missing GEMINI_API_KEY in Secrets.")
     st.stop()
 
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -35,12 +35,12 @@ genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 def load_model():
     return genai.GenerativeModel(
         model_name="gemini-3.1-flash-lite-preview",
-        system_instruction="You are MAX from Limon Media. Strategic and professional. You must collect a Business Name and Email Address."
+        system_instruction="You are MAX from Limon Media. Strategic and professional. You MUST collect a Business Name and Email Address."
     )
 
 model = load_model()
 
-# 4. Session History
+# 4. Session State
 if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.chat_session = model.start_chat(history=[])
@@ -51,12 +51,12 @@ for m in st.session_state.messages:
         st.markdown(m["content"])
 
 if not st.session_state.messages:
-    welcome = "Hi! I'm MAX from Limon Media. What business goals are we tackling today?"
+    welcome = "Hi! I'm MAX from Limon Media. I help Coachella Valley businesses scale. What is your main business goal right now?"
     st.session_state.messages.append({"role": "assistant", "content": welcome})
     with st.chat_message("assistant"):
         st.markdown(welcome)
 
-# 5. The Logic
+# 5. Input & Sync
 if prompt := st.chat_input("Message MAX..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -64,28 +64,43 @@ if prompt := st.chat_input("Message MAX..."):
 
     try:
         response = st.session_state.chat_session.send_message(prompt)
+        ai_response = response.text
+        
         with st.chat_message("assistant"):
-            st.markdown(response.text)
-        st.session_state.messages.append({"role": "assistant", "content": response.text})
+            st.markdown(ai_response)
+        st.session_state.messages.append({"role": "assistant", "content": ai_response})
 
-        # Check for email to trigger sync
-        history = " ".join([m["content"] for m in st.session_state.messages])
-        if "@" in history and not st.session_state.lead_captured:
-            extract = model.generate_content(f"Extract as pipes: Name | Email | Goal from: {history}").text
-            if "|" in extract:
+        # --- NEW TRIGGER LOGIC ---
+        # Look for the email symbol directly in the raw text
+        history_text = " ".join([m["content"] for m in st.session_state.messages])
+        
+        if "@" in history_text and not st.session_state.lead_captured:
+            # Tell the AI to give us the data cleanly
+            extract_prompt = f"From this chat history, extract the following as 'Name | Email | Goal'. History: {history_text}"
+            extraction = model.generate_content(extract_prompt).text
+            
+            if "|" in extraction:
+                parts = extraction.split("|")
+                # Prepare the new row
+                new_row = pd.DataFrame([{
+                    "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "Business Name": parts[0].strip(),
+                    "Email": parts[1].strip(),
+                    "Goals/Notes": parts[2].strip() if len(parts) > 2 else "Check history"
+                }])
+
+                # FORCED SYNC: Instead of 'create', we will read and then update the whole sheet
+                # This is often more reliable for Service Accounts
                 try:
-                    parts = extract.split("|")
-                    new_row = pd.DataFrame([{
-                        "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        "Business Name": parts[0].strip(),
-                        "Email": parts[1].strip(),
-                        "Goals/Notes": parts[2].strip() if len(parts) > 2 else "Check history"
-                    }])
-                    # APPEND TO SHEET
-                    conn.create(data=new_row)
+                    existing_data = conn.read(ttl=0) # Get fresh data
+                    updated_data = pd.concat([existing_data, new_row], ignore_index=True)
+                    conn.update(data=updated_data)
+                    
                     st.session_state.lead_captured = True
-                    st.toast("Success! Lead details synced.")
-                except:
-                    pass
+                    st.toast("🚀 Success! Edward's lead sheet has been updated.")
+                except Exception as sheet_error:
+                    # If this pops up, we have a permission issue with the Service Account
+                    st.error(f"Google Sheet sync failed: {sheet_error}")
+
     except Exception as e:
-        st.error(f"Sync issue: {e}")
+        st.error(f"Something went wrong: {e}")
