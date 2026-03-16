@@ -17,17 +17,20 @@ if "GEMINI_API_KEY" not in st.secrets:
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
 # 3. Model Initialization
-# We use 'gemini-1.5-flash-latest' to ensure we hit the right endpoint
+# We are switching to the Pro model alias to bypass the Flash 404 issue
 @st.cache_resource
 def load_model():
-    return genai.GenerativeModel("gemini-1.5-flash-latest")
+    return genai.GenerativeModel("gemini-1.5-pro")
 
-model = load_model()
+try:
+    model = load_model()
+except Exception as e:
+    st.error(f"Model Load Error: {e}")
 
 # 4. Chat History Management
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    # Start the conversation
+    # Start a clean chat session
     st.session_state.chat = model.start_chat(history=[])
 
 # Display existing messages
@@ -49,21 +52,20 @@ if prompt := st.chat_input("Tell MAX about your business..."):
         st.markdown(prompt)
 
     try:
-        # We wrap the user prompt with context to keep MAX in character
-        context = (
-            "You are MAX, the professional AI Intake Specialist for Limon Media. "
-            "Your goal is to explain how SEO, Ads, or Web Design can solve the user's problem. "
-            "MANDATORY: Ask for their Business Name and Email Address to set up a call with Edward Limon."
+        # Direct generation to bypass potential chat history formatting issues
+        persona = (
+            "You are MAX, the AI Intake Specialist for Limon Media. "
+            "Explain how digital marketing solves the user's problem. "
+            "Always ask for their Business Name and Email Address."
         )
         
-        # Send the message to Gemini
-        response = st.session_state.chat.send_message(f"{context}\n\nUser: {prompt}")
+        # Using the model directly for the response
+        response = model.generate_content(f"{persona}\n\nUser Goal: {prompt}")
         
         with st.chat_message("assistant"):
             st.markdown(response.text)
         st.session_state.messages.append({"role": "assistant", "content": response.text})
         
     except Exception as e:
-        # If it still fails, we show a helpful message
-        st.error("MAX is almost live! We just need to verify the API connection.")
+        st.error("MAX is almost live! We are refining the model connection.")
         st.info(f"Technical Detail: {e}")
