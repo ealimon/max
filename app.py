@@ -4,9 +4,9 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 
+# 1. UI Setup
 st.set_page_config(page_title="MAX | Limon Media", page_icon="🤖", layout="centered")
 
-# Professional Wix styling
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;}
@@ -17,16 +17,16 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 1. Establish Connection using Secrets
+# 2. Connection using Service Account Secrets
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
-    st.error(f"Connection Setup Error: {e}")
+    st.error("Connection configuration error. Check your Secrets.")
     st.stop()
 
-# 2. Configure Gemini
+# 3. Gemini Config
 if "GEMINI_API_KEY" not in st.secrets:
-    st.error("Missing GEMINI_API_KEY in Secrets.")
+    st.error("Missing GEMINI_API_KEY.")
     st.stop()
 
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -35,12 +35,12 @@ genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 def load_model():
     return genai.GenerativeModel(
         model_name="gemini-3.1-flash-lite-preview",
-        system_instruction="You are MAX from Limon Media. Strategic, professional, and friendly. You MUST collect a Business Name and Email Address."
+        system_instruction="You are MAX from Limon Media. Strategic and professional. You must collect a Business Name and Email Address."
     )
 
 model = load_model()
 
-# 3. Chat Session
+# 4. Session History
 if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.chat_session = model.start_chat(history=[])
@@ -51,12 +51,12 @@ for m in st.session_state.messages:
         st.markdown(m["content"])
 
 if not st.session_state.messages:
-    welcome = "Hi! I'm MAX from Limon Media. I help Coachella Valley businesses scale. What is your main business goal right now?"
+    welcome = "Hi! I'm MAX from Limon Media. What business goals are we tackling today?"
     st.session_state.messages.append({"role": "assistant", "content": welcome})
     with st.chat_message("assistant"):
         st.markdown(welcome)
 
-# 4. Chat Input & Sync Logic
+# 5. The Logic
 if prompt := st.chat_input("Message MAX..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -68,7 +68,7 @@ if prompt := st.chat_input("Message MAX..."):
             st.markdown(response.text)
         st.session_state.messages.append({"role": "assistant", "content": response.text})
 
-        # Check for email in history to trigger sync
+        # Check for email to trigger sync
         history = " ".join([m["content"] for m in st.session_state.messages])
         if "@" in history and not st.session_state.lead_captured:
             extract = model.generate_content(f"Extract as pipes: Name | Email | Goal from: {history}").text
@@ -81,11 +81,11 @@ if prompt := st.chat_input("Message MAX..."):
                         "Email": parts[1].strip(),
                         "Goals/Notes": parts[2].strip() if len(parts) > 2 else "Check history"
                     }])
-                    # APPEND DATA
+                    # APPEND TO SHEET
                     conn.create(data=new_row)
                     st.session_state.lead_captured = True
                     st.toast("Success! Lead details synced.")
                 except:
                     pass
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Sync issue: {e}")
