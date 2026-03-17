@@ -4,161 +4,72 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 
-# 1. UI Branding - Duffley Law PLLC Corporate Identity
-st.set_page_config(
-    page_title="Duffley Law PLLC | Client Portal",
-    page_icon="⚖️",
-    layout="centered"
-)
+# 1. UI Branding & Wix Optimization
+st.set_page_config(page_title="MAX | Limon Media", page_icon="🤖", layout="centered")
+st.markdown("<style>#MainMenu, footer, header {visibility: hidden;} div[data-testid='stToolbar'] {display: none;} .stApp {background-color: white;}</style>", unsafe_allow_html=True)
 
-# Custom CSS for the "Duffley Blue" Aesthetic
-st.markdown("""
-    <style>
-        #MainMenu, footer, header {visibility: hidden;}
-        div[data-testid="stToolbar"] {display: none;}
-        .stApp {background-color: #ffffff;}
-        
-        /* Corporate Font Styling (Serif for Professionalism) */
-        html, body, [class*="css"] {
-            font-family: 'Georgia', serif; 
-        }
-
-        /* Chat Bubble Styling */
-        [data-testid="stChatMessageAssistant"] {
-            background-color: #F8F9FA;
-            color: #1A365D;
-            border-left: 5px solid #1A365D;
-            border-radius: 0px 10px 10px 0px;
-        }
-        
-        [data-testid="stChatMessageUser"] {
-            background-color: #E2E8F0;
-            color: #2D3748;
-            border-radius: 10px;
-        }
-
-        .header-box {
-            text-align: center;
-            border-bottom: 2px solid #1A365D;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-        }
-
-        .stDeployButton {display:none;}
-        div[data-testid="stStatusWidget"] {visibility: hidden;}
-    </style>
-""", unsafe_allow_html=True)
-
-# 2. Professional Header
-st.markdown("""
-    <div class="header-box">
-        <h1 style="color: #1A365D; letter-spacing: 2px; margin-bottom: 0px; font-size: 1.8rem;">DUFFLEY LAW PLLC</h1>
-        <p style="color: #718096; font-style: italic; margin-top: 5px;">Estate Planning & Probate Specialists</p>
-    </div>
-""", unsafe_allow_html=True)
-
-# 3. Connection & AI Config
+# 2. Connection
 try:
+    # ttl=0 ensures we are always getting fresh data from Google
     conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
-except Exception:
-    st.error("Connection failed. Please refresh the page.")
+except Exception as e:
+    st.error(f"Secrets Error: {e}")
     st.stop()
 
+# 3. Gemini Config
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-
-# Safety Settings: Tells the AI to relax so it doesn't block legal keywords
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash-latest",
-    system_instruction=(
-        "You are the Professional Intake Assistant for Duffley Law PLLC. "
-        "STRICT LIMITATION: You are NOT an attorney. You cannot give legal advice, interpret laws, "
-        "or suggest legal strategies. If a user asks a legal question, politely explain that only an "
-        "attorney can answer that and you are here to help them schedule a consultation. "
-        "MANDATORY OPENING: You must state: 'I am an AI assistant, not an attorney. Our conversation does not create an attorney-client relationship.' "
-        "INTAKE GOAL: Collect 1. Full Name, 2. Texas County, 3. Need (Will, Trust, or Probate), "
-        "4. Brief family/asset summary, 5. Email or Phone number."
-    ),
-    safety_settings={
-        "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
-        "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE",
-        "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
-        "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
-    }
+    model_name="gemini-3.1-flash-lite-preview", 
+    system_instruction="You are MAX from Limon Media. Strategic and professional AI assistant. You MUST collect a Business Name and Email."
 )
 
-# 4. State Management
 if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.chat_session = model.start_chat(history=[])
     st.session_state.lead_captured = False
 
-# Display History with Scale (⚖️) and User (👤) Avatars
 for m in st.session_state.messages:
-    avatar_choice = "⚖️" if m["role"] == "assistant" else "👤"
-    with st.chat_message(m["role"], avatar=avatar_choice):
-        st.markdown(m["content"])
+    with st.chat_message(m["role"]): st.markdown(m["content"])
 
-# Initial Welcome
 if not st.session_state.messages:
-    welcome = "Welcome to Duffley Law PLLC. I am an AI assistant, not an attorney, and this conversation does not create an attorney-client relationship. How can we help you protect your family's legacy today?"
+    welcome = "Hi! I'm MAX from Limon Media. I help Coachella Valley businesses scale. What is your main business goal right now?"
     st.session_state.messages.append({"role": "assistant", "content": welcome})
-    with st.chat_message("assistant", avatar="⚖️"):
-        st.markdown(welcome)
+    with st.chat_message("assistant"): st.markdown(welcome)
 
-# 5. Intake & Data Sync
-if prompt := st.chat_input("How can we help?"):
+# 4. Reliable Sync Logic
+if prompt := st.chat_input("Message MAX..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user", avatar="👤"):
-        st.markdown(prompt)
+    with st.chat_message("user"): st.markdown(prompt)
 
     try:
         response = st.session_state.chat_session.send_message(prompt)
-        ai_msg = response.text
-        
-        with st.chat_message("assistant", avatar="⚖️"):
-            st.markdown(ai_msg)
-        st.session_state.messages.append({"role": "assistant", "content": ai_msg})
+        with st.chat_message("assistant"): st.markdown(response.text)
+        st.session_state.messages.append({"role": "assistant", "content": response.text})
 
-        # Sync Logic
-        full_history = " ".join([m["content"] for m in st.session_state.messages])
-        
-        if ("@" in full_history or any(char.isdigit() for char in full_history)) and not st.session_state.lead_captured:
-            extract = model.generate_content(f"Extract as pipes: Name | Inquiry Type | County | Contact | Summary from: {full_history}").text
-            
+        # TRIGGER: Sync when email is found
+        history = " ".join([m["content"] for m in st.session_state.messages])
+        if "@" in history and not st.session_state.lead_captured:
+            extract = model.generate_content(f"Extract as pipes: Name | Email | Goal from: {history}").text
             if "|" in extract:
                 try:
                     p = extract.split("|")
+                    # Ensure Row 1 of Sheet1 is: Date, Business, Email, Notes
                     new_row = pd.DataFrame([{
                         "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        "Client Name": p[0].strip() if len(p) > 0 else "Unknown",
-                        "Inquiry Type": p[1].strip() if len(p) > 1 else "Needs review",
-                        "Texas County": p[2].strip() if len(p) > 2 else "Check chat",
-                        "Email/Phone": p[3].strip() if len(p) > 3 else "Check chat",
-                        "Summary": p[4].strip() if len(p) > 4 else "Lead"
+                        "Business": p[0].strip(),
+                        "Email": p[1].strip(),
+                        "Notes": p[2].strip() if len(p) > 2 else "Lead"
                     }])
                     
-                    existing = conn.read(worksheet="Sheet1")
-                    updated = pd.concat([existing, new_row], ignore_index=True)
-                    conn.update(worksheet="Sheet1", data=updated)
+                    # --- THE FINAL FIX ---
+                    # Instead of 'create', we Read then Update
+                    existing_data = conn.read(worksheet="Sheet1")
+                    updated_data = pd.concat([existing_data, new_row], ignore_index=True)
+                    conn.update(worksheet="Sheet1", data=updated_data)
                     
                     st.session_state.lead_captured = True
-                    st.toast("✅ Information secured for attorney review.")
-                except:
-                    pass
+                    st.toast("✅ Strategy synced to Edward!")
+                except Exception as sheet_err:
+                    st.error(f"Sync Failure: {sheet_err}")
     except Exception as e:
-        st.error(f"System temporarily busy. Please try again.")
-
-# 6. Legal Footer
-st.markdown("<br><br>", unsafe_allow_html=True)
-st.markdown("---")
-st.markdown(
-    """
-    <div style="text-align: center; color: #718096; font-size: 0.8rem; padding: 10px;">
-        <p><strong>LEGAL DISCLAIMER</strong></p>
-        <p>This AI Assistant is for informational purposes only and does not constitute legal advice or the 
-        formation of an attorney-client relationship.</p>
-        <p>© 2026 Duffley Law PLLC. All Rights Reserved.</p>
-    </div>
-    """, 
-    unsafe_allow_html=True
-)
+        st.error(f"AI Error: {e}")
